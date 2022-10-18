@@ -225,7 +225,7 @@ class SharedSettingsGroup(SettingsGroupABC):
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
             iterations_a = explorer.get_case_by_id(case_a_id).get_iterations()
-            iterations_b = explorer.get_case_by_id(case_a_id).get_iterations()
+            iterations_b = explorer.get_case_by_id(case_b_id).get_iterations()
             iteration_a_opts = (
                 [
                     {"label": iteration["name"], "value": iteration["id"]}
