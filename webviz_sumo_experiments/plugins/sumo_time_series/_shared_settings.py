@@ -8,6 +8,7 @@ import webviz_core_components as wcc
 
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import SettingsGroupABC
+from .sumo_requests import get_cases_with_smry_data
 
 
 class SharedSettingsGroup(SettingsGroupABC):
@@ -122,6 +123,7 @@ class SharedSettingsGroup(SettingsGroupABC):
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
             fields = explorer.get_fields()
+
             return [
                 {"label": field, "value": field} for field in list(fields.keys())
             ], list(fields.keys())[0]
@@ -156,11 +158,9 @@ class SharedSettingsGroup(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            case_ids = get_cases_with_smry_data(explorer, field)
+            cases = [explorer.get_case_by_id(case_id) for case_id in case_ids]
 
-            cases: List[Case] = [
-                case for case in explorer.get_cases() if case.field_name == field
-            ]
-            print(cases[0].get_iterations())
             if cases:
                 initial_case_id = cases[0].sumo_id
                 if self.initial_case_name is not None:
@@ -224,8 +224,16 @@ class SharedSettingsGroup(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
-            iterations_a = explorer.get_case_by_id(case_a_id).get_iterations()
-            iterations_b = explorer.get_case_by_id(case_a_id).get_iterations()
+            iterations_a = (
+                explorer.get_case_by_id(case_a_id).get_iterations()
+                if case_a_id
+                else None
+            )
+            iterations_b = (
+                explorer.get_case_by_id(case_b_id).get_iterations()
+                if case_b_id
+                else None
+            )
             iteration_a_opts = (
                 [
                     {"label": iteration["name"], "value": iteration["id"]}

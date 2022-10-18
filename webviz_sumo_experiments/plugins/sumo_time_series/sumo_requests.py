@@ -4,6 +4,23 @@ import pyarrow as pa
 import time
 
 
+def get_cases_with_smry_data(explorer: Explorer, field: str):
+    start_s = time.perf_counter()
+    hits = explorer.sumo.get(
+        "/search",
+        query=f"class:table AND \
+                masterdata.smda.field.identifier:{field} AND \
+                data.name:summary AND \
+                fmu.realization.id:0 AND \
+                fmu.iteration.id:0",
+        select="_sumo.parent_object",
+    )["hits"]["hits"]
+    if not hits:
+        return []
+
+    return [hit["_source"]["_sumo"]["parent_object"] for hit in hits]
+
+
 def get_smry_vector_names(
     explorer: Explorer, case_uuid: str, iteration_id: str
 ) -> List[str]:
@@ -19,7 +36,7 @@ def get_smry_vector_names(
         select="data.spec.columns",
     )["hits"]["hits"]
     if not hits:
-        return None
+        return []
     columns = hits[0]["_source"]["data"]["spec"]["columns"]
     time_now = time.perf_counter()
     elapsed = time_now - start_s
