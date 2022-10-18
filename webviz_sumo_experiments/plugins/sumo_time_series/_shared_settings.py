@@ -18,11 +18,11 @@ class SharedSettingsGroup(SettingsGroupABC):
         CASE_B = "sumo-caseb"
 
     def __init__(
-        self, env: str, valid_case_names: List[str], interactive: bool
+        self, env: str, initial_case_name: List[str], interactive: bool
     ) -> None:
         super().__init__("Sumo cases")
         self.env = env
-        self.valid_case_names = valid_case_names
+        self.initial_case_name = initial_case_name
         self.interactive = interactive
 
     @property
@@ -134,21 +134,24 @@ class SharedSettingsGroup(SettingsGroupABC):
             cases: List[Case] = [
                 case for case in explorer.get_cases() if case.field_name == field
             ]
-            if self.valid_case_names is not None:
-                cases = [
-                    case for case in cases if case.case_name in self.valid_case_names
-                ]
+
             if cases:
+                initial_case_id = cases[0].sumo_id
+                if self.initial_case_name is not None:
+                    for case in cases:
+                        if self.initial_case_name in case.case_name:
+                            initial_case_id = case.sumo_id
+                            break
                 return (
                     [
                         {"label": case.case_name, "value": case.sumo_id}
                         for case in cases
                     ],
-                    cases[0].sumo_id,
+                    initial_case_id,
                     [
                         {"label": case.case_name, "value": case.sumo_id}
                         for case in cases
                     ],
-                    cases[0].sumo_id,
+                    initial_case_id,
                 )
             return [], None, [], None

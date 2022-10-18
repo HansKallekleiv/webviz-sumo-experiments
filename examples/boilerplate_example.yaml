@@ -12,5 +12,4 @@ layout:
   - page: Sumo
     content:
       - SumoTimeSeries:
-          # valid_case_names:
-          #   - 01_drogon_design_summary
+          initial_case_name: 01_drogon_design_summary

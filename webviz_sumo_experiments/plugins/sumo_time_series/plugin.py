@@ -13,11 +13,11 @@ class SumoTimeSeries(WebvizPluginABC):
         PLOT_VIEW = "plot-view"
         SHARED_SETTINGS = "shared-settings"
 
-    def __init__(self, env: str = "dev", valid_case_names: List[str] = None):
+    def __init__(self, env: str = "dev", initial_case_name: List[str] = None):
         super().__init__(stretch=True)
         self.interactive = WEBVIZ_INSTANCE_INFO.run_mode != WebvizRunMode.PORTABLE
         self.settings_group = SharedSettingsGroup(
-            env=env, valid_case_names=valid_case_names, interactive=self.interactive
+            env=env, initial_case_name=initial_case_name, interactive=self.interactive
         )
         self.add_shared_settings_group(
             self.settings_group, SumoTimeSeries.Ids.SHARED_SETTINGS
