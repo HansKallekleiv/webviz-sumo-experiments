@@ -9,7 +9,7 @@ options:
 
 # ------------------------------
 layout:
-  - page: Some custom plugin
+  - page: Sumo
     content:
       - SumoTimeSeries:
           # valid_case_names:
