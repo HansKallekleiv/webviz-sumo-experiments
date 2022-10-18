@@ -1,7 +1,9 @@
 from typing import List
 
+import flask
 from dash.development.base_component import Component
 from dash import html, callback, Input, Output, no_update
+import numpy as np
 import pandas as pd
 import webviz_core_components as wcc
 import plotly.graph_objects as go
@@ -39,12 +41,14 @@ class TimeSeriesView(ViewABC):
         PLOT = "plot"
         SETTINGS = "settings"
 
-    def __init__(self, case_a_selector, case_b_selector) -> None:
+    def __init__(self, env: str, case_a_selector, case_b_selector, interactive) -> None:
         super().__init__("Shared settings")
         self.add_settings_group(TimeSeriesSettings(), TimeSeriesView.Ids.SETTINGS)
         self.add_view_element(TimeSeriesPlot(), TimeSeriesView.Ids.PLOT)
         self.case_a_selector = case_a_selector
         self.case_b_selector = case_b_selector
+        self.env = env
+        self.interactive = interactive
         self.set_callbacks()
 
     def layout(self) -> List[Component]:
@@ -82,17 +86,29 @@ class TimeSeriesView(ViewABC):
             Input(self.case_b_selector, "value"),
         )
         def _get_vectors(case_a, case_b):
-            explorer = Explorer(env="dev", interactive=True)
+            if self.interactive:
+                explorer = Explorer(env=self.env, interactive=self.interactive)
+            else:
+                explorer = Explorer(
+                    env=self.env,
+                    token=flask.request.headers["X-Auth-Request-Access-Token"],
+                )
 
             vectors_a = get_smry_vector_names(explorer=explorer, case_uuid=case_a)
             vectors_b = get_smry_vector_names(explorer=explorer, case_uuid=case_b)
-
-            return (
-                [{"label": vector, "value": vector} for vector in vectors_a],
-                vectors_a[0],
-                [{"label": vector, "value": vector} for vector in vectors_b],
-                vectors_b[0],
-            )
+            if vectors_a:
+                veca_opts = [{"label": vector, "value": vector} for vector in vectors_a]
+                veca_val = vectors_a[0]
+            else:
+                veca_opts = []
+                veca_val = None
+            if vectors_b:
+                vecb_opts = [{"label": vector, "value": vector} for vector in vectors_b]
+                vecb_val = vectors_b[0]
+            else:
+                vecb_opts = []
+                vecb_val = None
+            return (veca_opts, veca_val, vecb_opts, vecb_val)
 
         @callback(
             Output(view_comp_id(TimeSeriesPlot.Ids.GRAPH), "figure"),
@@ -100,45 +116,165 @@ class TimeSeriesView(ViewABC):
             Input(self.case_b_selector, "value"),
             Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
             Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
+            Input(settings_comp_id(TimeSeriesSettings.Ids.AGGREGATION), "value"),
         )
-        def _get_vectors(case_a, case_b, vector_a, vector_b):
-            explorer = Explorer(env="dev", interactive=True)
-            # if not case_a or case_b or vector_a or vector_b:
-            #     return no_update
-            name_a = f"{explorer.get_case_by_id(case_a).case_name}-{vector_a}"
-            name_b = f"{explorer.get_case_by_id(case_b).case_name}-{vector_b}"
-
-            df = get_vector_data(explorer, case_a, "DATE")
-            df[name_a] = get_vector_data(explorer, case_a, vector_a)[vector_a]
-            df[name_b] = get_vector_data(explorer, case_b, vector_b)[vector_b]
+        def _get_vectors(case_a, case_b, vector_a, vector_b, aggregation: str):
+            if self.interactive:
+                explorer = Explorer(env=self.env, interactive=self.interactive)
+            else:
+                explorer = Explorer(
+                    env=self.env,
+                    token=flask.request.headers["X-Auth-Request-Access-Token"],
+                )
 
             fig = go.Figure()
-            for idx, (real, real_df) in enumerate(df.groupby("REAL")):
-                fig.add_trace(
-                    go.Scatter(
-                        x=real_df["DATE"],
-                        y=real_df[name_a],
-                        mode="lines",
-                        name=f"{real}-{name_a}",
-                        line={"color": "red"},
-                        legendgroup=name_a,
-                        showlegend=idx == 0,
+            if case_a and vector_a:
+                if aggregation == "aggregation":
+                    fig.add_traces(
+                        plotly_aggregation_traces_for_vector(
+                            explorer, case_a, vector_a, "red"
+                        )
                     )
-                )
+                else:
+                    fig.add_traces(
+                        plotly_realization_traces_for_vector(
+                            explorer, case_a, vector_a, "red"
+                        )
+                    )
+            if case_b and vector_b:
+                if aggregation == "aggregation":
+                    fig.add_traces(
+                        plotly_aggregation_traces_for_vector(
+                            explorer, case_b, vector_b, "blue"
+                        )
+                    )
+                else:
+                    fig.add_traces(
+                        plotly_realization_traces_for_vector(
+                            explorer, case_b, vector_b, "blue"
+                        )
+                    )
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=real_df["DATE"],
-                        y=real_df[name_b],
-                        mode="lines",
-                        name=f"{real}-{name_b}",
-                        line={"color": "blue"},
-                        legendgroup=name_b,
-                        showlegend=idx == 0,
-                    )
-                )
-            # fig_a = px.line(veca_df, x="DATE", y=vector_a, height=800, color="REAL")
-            # fig_b = px.line(vecb_df, x="DATE", y=vector_b, height=800, color="REAL")
-            # fig.add_traces(fig_a["data"])
-            # fig.add_traces(fig_b["data"])
             return fig
+
+
+def plotly_realization_traces_for_vector(
+    explorer: Explorer, case_id: str, vector_name: str, color: str
+):
+
+    df = get_vector_data(explorer, case_id, "DATE")
+    df[vector_name] = get_vector_data(explorer, case_id, vector_name)[vector_name]
+    name = f"{explorer.get_case_by_id(case_id).case_name}-{vector_name}"
+    return [
+        go.Scatter(
+            x=real_df["DATE"],
+            y=real_df[vector_name],
+            mode="lines",
+            name=name,
+            line={"color": color},
+            legendgroup=name,
+            hovertemplate=f"Realization: {real}",
+            showlegend=idx == 0,
+        )
+        for idx, (real, real_df) in enumerate(df.groupby("REAL"))
+    ]
+
+
+def calc_series_statistics(
+    df: pd.DataFrame, vector_name: str, refaxis: str = "DATE"
+) -> pd.DataFrame:
+
+    # Invert p10 and p90 due to oil industry convention.
+    def p10(x: List[float]) -> np.floating:
+        return np.nanpercentile(x, q=90)
+
+    def p90(x: List[float]) -> np.floating:
+        return np.nanpercentile(x, q=10)
+
+    # Calculate statistics, ignoring NaNs.
+    stat_df = (
+        df[[refaxis, vector_name]]
+        .groupby(refaxis)
+        .agg([np.nanmean, np.nanmin, np.nanmax, p10, p90])
+        .reset_index()  # level=["label", refaxis], col_level=0)
+    )
+    # Rename nanmin, nanmax and nanmean to min, max and mean.
+    col_stat_label_map = {
+        "nanmin": "min",
+        "nanmax": "max",
+        "nanmean": "mean",
+        "p10": "high_p10",
+        "p90": "low_p90",
+    }
+    stat_df.rename(columns=col_stat_label_map, level=1, inplace=True)
+
+    return stat_df
+
+
+def plotly_aggregation_traces_for_vector(
+    explorer: Explorer, case_id: str, vector_name: str, color: str
+) -> dict:
+    case_name = explorer.get_case_by_id(case_id).case_name
+    df = get_vector_data(explorer, case_id, "DATE")
+    df[vector_name] = get_vector_data(explorer, case_id, vector_name)[vector_name]
+    name = f"{case_name}-{vector_name}"
+    stat_df = calc_series_statistics(df, vector_name)
+    traces = [
+        {
+            "line": {"dash": "dot", "width": 3},
+            "x": stat_df["DATE"],
+            "y": stat_df[(vector_name, "max")],
+            "hovertemplate": f"Calculation: {'max'},Case: {case_name}",
+            "name": case_name,
+            "legendgroup": case_name,
+            "showlegend": False,
+            "marker": {"color": color},
+            "mode": "lines",
+        },
+        {
+            "line": {"dash": "dash"},
+            "x": stat_df["DATE"],
+            "y": stat_df[(vector_name, "high_p10")],
+            "hovertemplate": f"Calculation: {'high_p10'},Case: {case_name}",
+            "name": case_name,
+            "legendgroup": case_name,
+            "showlegend": False,
+            "marker": {"color": color},
+            "mode": "lines",
+        },
+        {
+            "x": stat_df["DATE"],
+            "y": stat_df[(vector_name, "mean")],
+            "hovertemplate": f"Calculation: {'mean'}, Case: {case_name}",
+            "name": case_name,
+            "legendgroup": case_name,
+            # "fill": "tonexty",
+            "marker": {"color": color},
+            "mode": "lines",
+            "line": {"width": 3},
+        },
+        {
+            "line": {"dash": "dash"},
+            "x": stat_df["DATE"],
+            "y": stat_df[(vector_name, "low_p90")],
+            "hovertemplate": f"Calculation: {'low_p90'}, Case: {case_name}",
+            "name": case_name,
+            "legendgroup": case_name,
+            "showlegend": False,
+            # "fill": "tonexty",
+            "marker": {"color": color},
+            "mode": "lines",
+        },
+        {
+            "line": {"dash": "dot", "width": 1},
+            "x": stat_df["DATE"],
+            "y": stat_df[(vector_name, "min")],
+            "hovertemplate": f"Calculation: {'min'}, Case: {case_name}",
+            "name": case_name,
+            "legendgroup": case_name,
+            "showlegend": False,
+            "marker": {"color": color},
+            "mode": "lines",
+        },
+    ]
+    return traces

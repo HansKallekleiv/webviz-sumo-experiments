@@ -9,22 +9,8 @@ options:
 
 # ------------------------------
 layout:
-  - section: Webviz Boilerplate
+  - page: Some custom plugin
     content:
-      # ------------------------------
-
-      - page: Front page
-        icon: home
-        content:
-          - This is a `webviz` instance created from a configuration file.
-          - Open menu on the left to select page for demo plugins.
-
-  - section: Example Plugins
-    content:
-      - group: Simple Plugins
-        icon: label
-        content:
-          - page: Some custom plugin
-            content:
-              - SumoTimeSeries:
-          
+      - SumoTimeSeries:
+          # valid_case_names:
+          #   - 01_drogon_design_summary

@@ -17,7 +17,10 @@ setup(
         ]
     },
     install_requires=[
-        "webviz-config>=0.1.0",
+        "webviz-config>=0.5.0",
+        "fmu-sumo@git+https://github.com/equinor/fmu-sumo@master",
+        "sumo-wrapper-python@git+https://github.com/equinor/sumo-wrapper-python.git@master",
+        "h11==0.11",  # ERROR: httpcore 0.15.0 has requirement h11<0.13,>=0.11, but you'll have h11 0.14.0 which is incompatible.
     ],
     tests_require=TESTS_REQUIRE,
     extras_require={"tests": TESTS_REQUIRE},
