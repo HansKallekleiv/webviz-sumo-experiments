@@ -191,7 +191,7 @@ class TimeSeriesView(ViewABC):
                             case_id=case_b,
                             vector_name=vector_b,
                             iteration_id=iteration_b,
-                            color="red",
+                            color="blue",
                         )
                     )
                 else:
@@ -201,7 +201,7 @@ class TimeSeriesView(ViewABC):
                             case_id=case_b,
                             vector_name=vector_b,
                             iteration_id=iteration_b,
-                            color="red",
+                            color="blue",
                         )
                     )
 
