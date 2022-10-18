@@ -16,6 +16,8 @@ class SharedSettingsGroup(SettingsGroupABC):
         FIELD = "sumo-field"
         CASE_A = "sumo-casea"
         CASE_B = "sumo-caseb"
+        ITERATION_A = "sumo-iterationa"
+        ITERATION_B = "sumo-iterationb"
 
     def __init__(
         self, env: str, initial_case_name: List[str], interactive: bool
@@ -32,6 +34,14 @@ class SharedSettingsGroup(SettingsGroupABC):
     @property
     def case_b_selector(self):
         return self.component_unique_id(SharedSettingsGroup.Ids.CASE_B).to_string()
+
+    @property
+    def iteration_a_selector(self):
+        return self.component_unique_id(SharedSettingsGroup.Ids.ITERATION_A).to_string()
+
+    @property
+    def iteration_b_selector(self):
+        return self.component_unique_id(SharedSettingsGroup.Ids.ITERATION_B).to_string()
 
     def layout(self) -> List[Component]:
         return [
@@ -60,11 +70,27 @@ class SharedSettingsGroup(SettingsGroupABC):
                     ),
                     wcc.Dropdown(
                         clearable=False,
+                        label="Iteration A",
+                        id=self.register_component_unique_id(
+                            SharedSettingsGroup.Ids.ITERATION_A
+                        ),
+                        placeholder="No valid iterations",
+                    ),
+                    wcc.Dropdown(
+                        clearable=False,
                         label="Case B",
                         id=self.register_component_unique_id(
                             SharedSettingsGroup.Ids.CASE_B
                         ),
                         placeholder="No valid cases",
+                    ),
+                    wcc.Dropdown(
+                        clearable=False,
+                        label="Iteration B",
+                        id=self.register_component_unique_id(
+                            SharedSettingsGroup.Ids.ITERATION_B
+                        ),
+                        placeholder="No valid iterations",
                     ),
                 ]
             )
@@ -134,7 +160,7 @@ class SharedSettingsGroup(SettingsGroupABC):
             cases: List[Case] = [
                 case for case in explorer.get_cases() if case.field_name == field
             ]
-
+            print(cases[0].get_iterations())
             if cases:
                 initial_case_id = cases[0].sumo_id
                 if self.initial_case_name is not None:
@@ -155,3 +181,68 @@ class SharedSettingsGroup(SettingsGroupABC):
                     initial_case_id,
                 )
             return [], None, [], None
+
+        @callback(
+            Output(
+                self.component_unique_id(
+                    SharedSettingsGroup.Ids.ITERATION_A
+                ).to_string(),
+                "options",
+            ),
+            Output(
+                self.component_unique_id(
+                    SharedSettingsGroup.Ids.ITERATION_A
+                ).to_string(),
+                "value",
+            ),
+            Output(
+                self.component_unique_id(
+                    SharedSettingsGroup.Ids.ITERATION_B
+                ).to_string(),
+                "options",
+            ),
+            Output(
+                self.component_unique_id(
+                    SharedSettingsGroup.Ids.ITERATION_B
+                ).to_string(),
+                "value",
+            ),
+            Input(
+                self.component_unique_id(SharedSettingsGroup.Ids.CASE_A).to_string(),
+                "value",
+            ),
+            Input(
+                self.component_unique_id(SharedSettingsGroup.Ids.CASE_B).to_string(),
+                "value",
+            ),
+        )
+        def _set_iterations(case_a_id: str, case_b_id: str):
+            if self.interactive:
+                explorer = Explorer(env=self.env, interactive=self.interactive)
+            else:
+                explorer = Explorer(
+                    env=self.env,
+                    token=flask.request.headers["X-Auth-Request-Access-Token"],
+                )
+            iterations_a = explorer.get_case_by_id(case_a_id).get_iterations()
+            iterations_b = explorer.get_case_by_id(case_a_id).get_iterations()
+            iteration_a_opts = (
+                [
+                    {"label": iteration["name"], "value": iteration["id"]}
+                    for iteration in iterations_a
+                ]
+                if iterations_a
+                else []
+            )
+            iteration_a_val = iterations_a[0]["id"] if iterations_a else None
+
+            iteration_b_opts = (
+                [
+                    {"label": iteration["name"], "value": iteration["id"]}
+                    for iteration in iterations_b
+                ]
+                if iterations_a
+                else []
+            )
+            iteration_b_val = iterations_b[0]["id"] if iterations_b else None
+            return iteration_a_opts, iteration_a_val, iteration_b_opts, iteration_b_val

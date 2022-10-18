@@ -28,7 +28,9 @@ class SumoTimeSeries(WebvizPluginABC):
                 env=env,
                 interactive=self.interactive,
                 case_a_selector=self.settings_group.case_a_selector,
+                iteration_a_selector=self.settings_group.iteration_a_selector,
                 case_b_selector=self.settings_group.case_b_selector,
+                iteration_b_selector=self.settings_group.iteration_b_selector,
             ),
             SumoTimeSeries.Ids.PLOT_VIEW,
         )

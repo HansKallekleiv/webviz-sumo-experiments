@@ -2,7 +2,7 @@ from typing import List
 
 import flask
 from dash.development.base_component import Component
-from dash import html, callback, Input, Output, no_update
+from dash import html, callback, Input, Output, no_update, State
 import numpy as np
 import pandas as pd
 import webviz_core_components as wcc
@@ -41,11 +41,21 @@ class TimeSeriesView(ViewABC):
         PLOT = "plot"
         SETTINGS = "settings"
 
-    def __init__(self, env: str, case_a_selector, case_b_selector, interactive) -> None:
+    def __init__(
+        self,
+        env: str,
+        case_a_selector,
+        case_b_selector,
+        iteration_a_selector,
+        iteration_b_selector,
+        interactive,
+    ) -> None:
         super().__init__("Shared settings")
         self.add_settings_group(TimeSeriesSettings(), TimeSeriesView.Ids.SETTINGS)
         self.add_view_element(TimeSeriesPlot(), TimeSeriesView.Ids.PLOT)
         self.case_a_selector = case_a_selector
+        self.iteration_a_selector = iteration_a_selector
+        self.iteration_b_selector = iteration_b_selector
         self.case_b_selector = case_b_selector
         self.env = env
         self.interactive = interactive
@@ -84,8 +94,14 @@ class TimeSeriesView(ViewABC):
             Output(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
             Input(self.case_a_selector, "value"),
             Input(self.case_b_selector, "value"),
+            Input(self.iteration_a_selector, "value"),
+            Input(self.iteration_b_selector, "value"),
+            State(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
+            State(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
         )
-        def _get_vectors(case_a, case_b):
+        def _get_vectors(
+            case_a, case_b, iteration_a, iteration_b, current_vector_a, current_vector_b
+        ):
             if self.interactive:
                 explorer = Explorer(env=self.env, interactive=self.interactive)
             else:
@@ -94,17 +110,25 @@ class TimeSeriesView(ViewABC):
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
 
-            vectors_a = get_smry_vector_names(explorer=explorer, case_uuid=case_a)
-            vectors_b = get_smry_vector_names(explorer=explorer, case_uuid=case_b)
+            vectors_a = get_smry_vector_names(
+                explorer=explorer, case_uuid=case_a, iteration_id=iteration_a
+            )
+            vectors_b = get_smry_vector_names(
+                explorer=explorer, case_uuid=case_b, iteration_id=iteration_b
+            )
             if vectors_a:
                 veca_opts = [{"label": vector, "value": vector} for vector in vectors_a]
-                veca_val = vectors_a[0]
+                veca_val = (
+                    current_vector_a if current_vector_a in vectors_a else vectors_a[0]
+                )
             else:
                 veca_opts = []
                 veca_val = None
             if vectors_b:
                 vecb_opts = [{"label": vector, "value": vector} for vector in vectors_b]
-                vecb_val = vectors_b[0]
+                vecb_val = (
+                    current_vector_b if current_vector_b in vectors_b else vectors_b[0]
+                )
             else:
                 vecb_opts = []
                 vecb_val = None
@@ -114,11 +138,21 @@ class TimeSeriesView(ViewABC):
             Output(view_comp_id(TimeSeriesPlot.Ids.GRAPH), "figure"),
             Input(self.case_a_selector, "value"),
             Input(self.case_b_selector, "value"),
+            Input(self.iteration_a_selector, "value"),
+            Input(self.iteration_b_selector, "value"),
             Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
             Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
             Input(settings_comp_id(TimeSeriesSettings.Ids.AGGREGATION), "value"),
         )
-        def _get_vectors(case_a, case_b, vector_a, vector_b, aggregation: str):
+        def _get_vectors(
+            case_a,
+            case_b,
+            iteration_a,
+            iteration_b,
+            vector_a,
+            vector_b,
+            aggregation: str,
+        ):
             if self.interactive:
                 explorer = Explorer(env=self.env, interactive=self.interactive)
             else:
@@ -132,26 +166,42 @@ class TimeSeriesView(ViewABC):
                 if aggregation == "aggregation":
                     fig.add_traces(
                         plotly_aggregation_traces_for_vector(
-                            explorer, case_a, vector_a, "red"
+                            explorer,
+                            case_id=case_a,
+                            vector_name=vector_a,
+                            iteration_id=iteration_a,
+                            color="red",
                         )
                     )
                 else:
                     fig.add_traces(
                         plotly_realization_traces_for_vector(
-                            explorer, case_a, vector_a, "red"
+                            explorer,
+                            case_id=case_a,
+                            vector_name=vector_a,
+                            iteration_id=iteration_a,
+                            color="red",
                         )
                     )
             if case_b and vector_b:
                 if aggregation == "aggregation":
                     fig.add_traces(
                         plotly_aggregation_traces_for_vector(
-                            explorer, case_b, vector_b, "blue"
+                            explorer,
+                            case_id=case_b,
+                            vector_name=vector_b,
+                            iteration_id=iteration_b,
+                            color="red",
                         )
                     )
                 else:
                     fig.add_traces(
                         plotly_realization_traces_for_vector(
-                            explorer, case_b, vector_b, "blue"
+                            explorer,
+                            case_id=case_b,
+                            vector_name=vector_b,
+                            iteration_id=iteration_b,
+                            color="red",
                         )
                     )
 
@@ -159,12 +209,16 @@ class TimeSeriesView(ViewABC):
 
 
 def plotly_realization_traces_for_vector(
-    explorer: Explorer, case_id: str, vector_name: str, color: str
+    explorer: Explorer, case_id: str, iteration_id: str, vector_name: str, color: str
 ):
 
-    df = get_vector_data(explorer, case_id, "DATE")
-    df[vector_name] = get_vector_data(explorer, case_id, vector_name)[vector_name]
-    name = f"{explorer.get_case_by_id(case_id).case_name}-{vector_name}"
+    df = get_vector_data(
+        explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
+    )
+    df[vector_name] = get_vector_data(
+        explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
+    )[vector_name]
+    name = f"{explorer.get_case_by_id(case_id).case_name}-{iteration_id}-{vector_name}"
     return [
         go.Scatter(
             x=real_df["DATE"],
@@ -212,12 +266,15 @@ def calc_series_statistics(
 
 
 def plotly_aggregation_traces_for_vector(
-    explorer: Explorer, case_id: str, vector_name: str, color: str
+    explorer: Explorer, case_id: str, iteration_id: str, vector_name: str, color: str
 ) -> dict:
-    case_name = explorer.get_case_by_id(case_id).case_name
-    df = get_vector_data(explorer, case_id, "DATE")
-    df[vector_name] = get_vector_data(explorer, case_id, vector_name)[vector_name]
-    name = f"{case_name}-{vector_name}"
+    case_name = f"{explorer.get_case_by_id(case_id).case_name}-{iteration_id}"
+    df = get_vector_data(
+        explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
+    )
+    df[vector_name] = get_vector_data(
+        explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
+    )[vector_name]
     stat_df = calc_series_statistics(df, vector_name)
     traces = [
         {
