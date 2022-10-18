@@ -88,7 +88,13 @@ class SharedSettingsGroup(SettingsGroupABC):
             ),
         )
         def _set_field(_):
-            explorer = Explorer(env=self.env, interactive=self.interactive)
+            if self.interactive:
+                explorer = Explorer(env=self.env, interactive=self.interactive)
+            else:
+                explorer = Explorer(
+                    env=self.env,
+                    token=flask.request.headers["X-Auth-Request-Access-Token"],
+                )
             fields = explorer.get_fields()
             return [
                 {"label": field, "value": field} for field in list(fields.keys())
