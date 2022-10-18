@@ -26,14 +26,5 @@ layout:
         content:
           - page: Some custom plugin
             content:
-              - SomeCustomPlugin:
-          - page: Some other custom plugin
-            content:
-              - SomeOtherCustomPlugin:
-      - group: Advanced Plugins
-        icon: table_chart
-        content:
-          - page: Best practice plugin
-            content:
-              - This is a `webviz` plugin implemented with suggestion to best practice code structure
-              - BestPracticePlugin:
+              - SumoTimeSeries:
+          
