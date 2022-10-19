@@ -14,6 +14,7 @@ setup(
     entry_points={
         "webviz_config_plugins": [
             "SumoTimeSeries = webviz_sumo_experiments.plugins:SumoTimeSeries",
+            "SumoVolumetrics = webviz_sumo_experiments.plugins:SumoVolumetrics",
         ]
     },
     install_requires=[

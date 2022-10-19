@@ -9,7 +9,11 @@ options:
 
 # ------------------------------
 layout:
-  - page: Sumo
+  - page: Sumo Time Series
     content:
       - SumoTimeSeries:
           initial_case_name: 01_drogon_design_summary
+  - page: Sumo Volumetrics
+    content:
+      - SumoVolumetrics:
+          

@@ -9,10 +9,11 @@ import webviz_core_components as wcc
 import plotly.graph_objects as go
 import plotly.express as px
 from fmu.sumo.explorer import Explorer
-from ...sumo_requests import get_smry_vector_names, get_vector_data
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import ViewABC, ViewElementABC
+
 from .settings import TimeSeriesSettings
+from ...sumo_requests import get_smry_vector_names, get_vector_data
 
 
 class TimeSeriesPlot(ViewElementABC):
@@ -215,8 +216,6 @@ def plotly_realization_traces_for_vector(
     df = get_vector_data(
         explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
     )
-    if df is None:
-        return []
     df[vector_name] = get_vector_data(
         explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
     )[vector_name]
@@ -274,8 +273,6 @@ def plotly_aggregation_traces_for_vector(
     df = get_vector_data(
         explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
     )
-    if df is None:
-        return []
     df[vector_name] = get_vector_data(
         explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
     )[vector_name]
