@@ -2,7 +2,7 @@ from typing import List
 
 import flask
 from dash.development.base_component import Component
-from dash import html, callback, Input, Output, no_update, State
+from dash import html, callback, Input, Output, no_update, State, MATCH, ALL
 import numpy as np
 import pandas as pd
 import webviz_core_components as wcc
@@ -12,7 +12,8 @@ from fmu.sumo.explorer import Explorer
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import ViewABC, ViewElementABC
 
-from .settings import TimeSeriesSettings
+from .time_series_settings import TimeSeriesSettings
+from .case_settings import CaseSettings
 from ...sumo_requests import get_smry_vector_names, get_vector_data
 
 
@@ -40,24 +41,25 @@ class TimeSeriesPlot(ViewElementABC):
 class TimeSeriesView(ViewABC):
     class Ids(StrEnum):
         PLOT = "plot"
-        SETTINGS = "settings"
+        TIMESETTINGS = "timeseries-settings"
+        CASESETTINGS = "case-settings"
 
     def __init__(
         self,
         env: str,
-        case_a_selector,
-        case_b_selector,
-        iteration_a_selector,
-        iteration_b_selector,
-        interactive,
+        interactive: bool,
+        initial_case_name: str = None,
     ) -> None:
         super().__init__("Shared settings")
-        self.add_settings_group(TimeSeriesSettings(), TimeSeriesView.Ids.SETTINGS)
+        self.add_settings_group(
+            CaseSettings(
+                env=env, initial_case_name=initial_case_name, interactive=interactive
+            ),
+            TimeSeriesView.Ids.CASESETTINGS,
+        )
+        self.add_settings_group(TimeSeriesSettings(), TimeSeriesView.Ids.TIMESETTINGS)
         self.add_view_element(TimeSeriesPlot(), TimeSeriesView.Ids.PLOT)
-        self.case_a_selector = case_a_selector
-        self.iteration_a_selector = iteration_a_selector
-        self.iteration_b_selector = iteration_b_selector
-        self.case_b_selector = case_b_selector
+
         self.env = env
         self.interactive = interactive
         self.set_callbacks()
@@ -74,12 +76,19 @@ class TimeSeriesView(ViewABC):
         ]
 
     def set_callbacks(self) -> None:
-        def settings_comp_id(comp: str):
-            return (
-                self.settings_group(TimeSeriesView.Ids.SETTINGS)
-                .component_unique_id(comp)
-                .to_string()
-            )
+        def case_settings_id(**kwargs):
+            comp_id = {
+                "id": self.settings_groups()[0].get_unique_id().to_string(),
+            }
+            comp_id.update(kwargs)
+            return comp_id
+
+        def vector_settings(**kwargs):
+            comp_id = {
+                "id": self.settings_groups()[1].get_unique_id().to_string(),
+            }
+            comp_id.update(kwargs)
+            return comp_id
 
         def view_comp_id(comp: str):
             return (
@@ -89,20 +98,28 @@ class TimeSeriesView(ViewABC):
             )
 
         @callback(
-            Output(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "options"),
-            Output(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
-            Output(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "options"),
-            Output(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
-            Input(self.case_a_selector, "value"),
-            Input(self.case_b_selector, "value"),
-            Input(self.iteration_a_selector, "value"),
-            Input(self.iteration_b_selector, "value"),
-            State(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
-            State(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
+            Output(
+                vector_settings(case=MATCH, comp="vector"),
+                "options",
+            ),
+            Output(
+                vector_settings(case=MATCH, comp="vector"),
+                "value",
+            ),
+            Input(
+                case_settings_id(case=MATCH, comp="case"),
+                "value",
+            ),
+            Input(
+                case_settings_id(case=MATCH, comp="iteration"),
+                "value",
+            ),
+            State(
+                vector_settings(case=MATCH, comp="vector"),
+                "value",
+            ),
         )
-        def _get_vectors(
-            case_a, case_b, iteration_a, iteration_b, current_vector_a, current_vector_b
-        ):
+        def _get_vectors(case_uuid, iteration_id, current_vector):
             if self.interactive:
                 explorer = Explorer(env=self.env, interactive=self.interactive)
             else:
@@ -111,47 +128,43 @@ class TimeSeriesView(ViewABC):
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
 
-            vectors_a = get_smry_vector_names(
-                explorer=explorer, case_uuid=case_a, iteration_id=iteration_a
+            vectors = get_smry_vector_names(
+                explorer=explorer, case_uuid=case_uuid, iteration_id=iteration_id
             )
-            vectors_b = get_smry_vector_names(
-                explorer=explorer, case_uuid=case_b, iteration_id=iteration_b
-            )
-            if vectors_a:
-                veca_opts = [{"label": vector, "value": vector} for vector in vectors_a]
-                veca_val = (
-                    current_vector_a if current_vector_a in vectors_a else vectors_a[0]
-                )
+            if vectors:
+                vec_opts = [{"label": vector, "value": vector} for vector in vectors]
+                vec_val = current_vector if current_vector in vectors else vectors[0]
             else:
-                veca_opts = []
-                veca_val = None
-            if vectors_b:
-                vecb_opts = [{"label": vector, "value": vector} for vector in vectors_b]
-                vecb_val = (
-                    current_vector_b if current_vector_b in vectors_b else vectors_b[0]
-                )
-            else:
-                vecb_opts = []
-                vecb_val = None
-            return (veca_opts, veca_val, vecb_opts, vecb_val)
+                vec_opts = []
+                vec_val = None
+
+            return (vec_opts, vec_val)
 
         @callback(
             Output(view_comp_id(TimeSeriesPlot.Ids.GRAPH), "figure"),
-            Input(self.case_a_selector, "value"),
-            Input(self.case_b_selector, "value"),
-            Input(self.iteration_a_selector, "value"),
-            Input(self.iteration_b_selector, "value"),
-            Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_A), "value"),
-            Input(settings_comp_id(TimeSeriesSettings.Ids.VECTOR_B), "value"),
-            Input(settings_comp_id(TimeSeriesSettings.Ids.AGGREGATION), "value"),
+            Input(
+                case_settings_id(case=ALL, comp="case"),
+                "value",
+            ),
+            Input(
+                case_settings_id(case=ALL, comp="iteration"),
+                "value",
+            ),
+            Input(
+                vector_settings(case=ALL, comp="vector"),
+                "value",
+            ),
+            Input(
+                self.settings_groups()[1]
+                .component_unique_id(TimeSeriesSettings.Ids.AGGREGATION)
+                .to_string(),
+                "value",
+            ),
         )
         def _get_vectors(
-            case_a,
-            case_b,
-            iteration_a,
-            iteration_b,
-            vector_a,
-            vector_b,
+            cases,
+            iterations,
+            vectors,
             aggregation: str,
         ):
             if self.interactive:
@@ -163,48 +176,34 @@ class TimeSeriesView(ViewABC):
                 )
 
             fig = go.Figure()
-            if case_a and vector_a:
-                if aggregation == "aggregation":
-                    fig.add_traces(
-                        plotly_aggregation_traces_for_vector(
-                            explorer,
-                            case_id=case_a,
-                            vector_name=vector_a,
-                            iteration_id=iteration_a,
-                            color="red",
+            if not cases or not iterations or not vectors:
+                return no_update
+            for case, iteration, vector, color in zip(
+                cases, iterations, vectors, ["red", "blue"]
+            ):
+
+                if case is not None and iteration is not None and vector is not None:
+
+                    if aggregation == "aggregation":
+                        fig.add_traces(
+                            plotly_aggregation_traces_for_vector(
+                                explorer,
+                                case_id=case,
+                                vector_name=vector,
+                                iteration_id=iteration,
+                                color=color,
+                            )
                         )
-                    )
-                else:
-                    fig.add_traces(
-                        plotly_realization_traces_for_vector(
-                            explorer,
-                            case_id=case_a,
-                            vector_name=vector_a,
-                            iteration_id=iteration_a,
-                            color="red",
+                    else:
+                        fig.add_traces(
+                            plotly_realization_traces_for_vector(
+                                explorer,
+                                case_id=case,
+                                vector_name=vector,
+                                iteration_id=iteration,
+                                color=color,
+                            )
                         )
-                    )
-            if case_b and vector_b:
-                if aggregation == "aggregation":
-                    fig.add_traces(
-                        plotly_aggregation_traces_for_vector(
-                            explorer,
-                            case_id=case_b,
-                            vector_name=vector_b,
-                            iteration_id=iteration_b,
-                            color="blue",
-                        )
-                    )
-                else:
-                    fig.add_traces(
-                        plotly_realization_traces_for_vector(
-                            explorer,
-                            case_id=case_b,
-                            vector_name=vector_b,
-                            iteration_id=iteration_b,
-                            color="blue",
-                        )
-                    )
 
             return fig
 

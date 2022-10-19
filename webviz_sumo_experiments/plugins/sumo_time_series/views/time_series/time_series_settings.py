@@ -25,17 +25,21 @@ class TimeSeriesSettings(SettingsGroupABC):
                     wcc.Dropdown(
                         clearable=False,
                         label="Vector Case A",
-                        id=self.register_component_unique_id(
-                            TimeSeriesSettings.Ids.VECTOR_A
-                        ),
+                        id={
+                            "case": "A",
+                            "comp": "vector",
+                            "id": self.get_unique_id().to_string(),
+                        },
                         placeholder="No vectors found",
                     ),
                     wcc.Dropdown(
                         clearable=False,
                         label="Vector Case B",
-                        id=self.register_component_unique_id(
-                            TimeSeriesSettings.Ids.VECTOR_B
-                        ),
+                        id={
+                            "case": "B",
+                            "comp": "vector",
+                            "id": self.get_unique_id().to_string(),
+                        },
                         placeholder="Try '01_drogon_design_summary'",
                     ),
                     wcc.RadioItems(
