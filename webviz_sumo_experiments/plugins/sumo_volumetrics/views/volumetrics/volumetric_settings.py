@@ -34,16 +34,6 @@ class VolumetricsSettings(SettingsGroupABC):
                     ),
                     wcc.Dropdown(
                         clearable=False,
-                        label="Volumetric table Case B",
-                        id={
-                            "case": "B",
-                            "comp": "name",
-                            "id": self.get_unique_id().to_string(),
-                        },
-                        placeholder="No tables found'",
-                    ),
-                    wcc.Dropdown(
-                        clearable=False,
                         label="Volumetric response Case A",
                         id={
                             "case": "A",
@@ -51,6 +41,16 @@ class VolumetricsSettings(SettingsGroupABC):
                             "id": self.get_unique_id().to_string(),
                         },
                         placeholder="No responses found",
+                    ),
+                    wcc.Dropdown(
+                        clearable=False,
+                        label="Volumetric table Case B",
+                        id={
+                            "case": "B",
+                            "comp": "name",
+                            "id": self.get_unique_id().to_string(),
+                        },
+                        placeholder="No tables found'",
                     ),
                     wcc.Dropdown(
                         clearable=False,

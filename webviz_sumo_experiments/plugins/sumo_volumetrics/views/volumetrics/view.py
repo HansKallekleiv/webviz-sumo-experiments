@@ -253,4 +253,4 @@ class VolumetricsView(ViewABC):
                 dfs.append(vol_df)
 
             df = pd.concat(dfs)
-            return px.histogram(df, x="value", color="response_name")
+            return px.histogram(df, x="value", facet_col="response_name")
