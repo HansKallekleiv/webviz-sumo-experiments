@@ -12,6 +12,7 @@ from fmu.sumo.explorer import Explorer
 from ...sumo_requests import (
     get_volumetrics_names_for_case_uuid,
     get_ensemble_volumetrics,
+    get_realization_volumetrics,
 )
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import ViewABC, ViewElementABC
@@ -178,7 +179,7 @@ class VolumetricsView(ViewABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
-            vol_df = get_ensemble_volumetrics(
+            vol_df = get_realization_volumetrics(
                 explorer=explorer,
                 case_uuid=case,
                 iteration_id=iteration,
@@ -245,12 +246,13 @@ class VolumetricsView(ViewABC):
                     volumetric_name=volname,
                 )
                 case_name = explorer.get_case_by_id(case).case_name
-                vol_df["CASE"] = case_name
                 vol_df["value"] = vol_df[volresponse]
+                vol_df = vol_df.groupby("REAL").sum(numeric_only=True)
                 vol_df[
                     "response_name"
                 ] = f"{case_name}-{iteration}-{volname}-{volresponse}"
                 dfs.append(vol_df)
 
             df = pd.concat(dfs)
-            return px.histogram(df, x="value", facet_col="response_name")
+
+            return px.histogram(df, x="value", nbins=20, facet_col="response_name")

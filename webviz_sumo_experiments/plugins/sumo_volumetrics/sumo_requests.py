@@ -53,6 +53,31 @@ def get_realizations_for_volumetric_name(
     return [hit["_source"]["fmu"]["realization"]["id"] for hit in hits]
 
 
+def get_realization_volumetrics(
+    explorer: Explorer,
+    case_uuid: str,
+    iteration_id: str,
+    volumetric_name: str,
+    realization_id: str = 0,
+):
+
+    hits = explorer.sumo.get(
+        "/search",
+        query=f"_sumo.parent_object:{case_uuid} AND \
+              class:table AND \
+              data.content:volumes AND \
+              data.name:{volumetric_name} AND \
+              fmu.iteration.id:{iteration_id} AND \
+              fmu.realization.id:{realization_id}",
+        size=1,
+        select=False,
+    )["hits"]["hits"]
+    if not hits:
+        return None
+    obj_uuid = hits[0]["_id"]
+    return pd.read_csv(BytesIO(explorer.sumo.get(f"/objects('{obj_uuid}')/blob")))
+
+
 def get_ensemble_volumetrics(
     explorer: Explorer, case_uuid: str, iteration_id: str, volumetric_name: str
 ):
@@ -67,7 +92,7 @@ def get_ensemble_volumetrics(
               class:table AND \
               data.content:volumes AND \
               data.name:{volumetric_name} AND \
-              fmu.iteration.id:0 AND \
+              fmu.iteration.id:{iteration_id} AND \
               fmu.realization.id:{real}",
             size=1,
             select=False,
