@@ -51,7 +51,7 @@ class VolumetricsPlot(ViewElementABC):
                     n_intervals=0,
                 ),
                 html.Pre(
-                    style={"height": "20vh", "overflow": "scroll"},
+                    style={"height": "40vh", "overflow": "scroll"},
                     id=self.register_component_unique_id(VolumetricsPlot.Ids.LOG),
                 ),
                 html.Button(
