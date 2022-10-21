@@ -1,8 +1,10 @@
+from io import StringIO
+import logging
 from typing import List
 
 import flask
 from dash.development.base_component import Component
-from dash import html, callback, Input, Output, no_update, State, MATCH, ALL
+from dash import html, dcc, callback, Input, Output, no_update, State, MATCH, ALL
 import numpy as np
 import pandas as pd
 import webviz_core_components as wcc
@@ -12,6 +14,7 @@ from fmu.sumo.explorer import Explorer
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import ViewABC, ViewElementABC
 
+from webviz_sumo_experiments import PerfTimer
 from .time_series_settings import TimeSeriesSettings
 from .case_settings import CaseSettings
 from ...sumo_requests import get_smry_vector_names, get_vector_data
@@ -20,20 +23,38 @@ from ...sumo_requests import get_smry_vector_names, get_vector_data
 class TimeSeriesPlot(ViewElementABC):
     class Ids(StrEnum):
         GRAPH = "graph"
+        INTERVAL = "interval"
+        LOG = "log"
+        CLEARLOG = "clearlog"
 
     def __init__(self) -> None:
         super().__init__(flex_grow=8)
 
     def inner_layout(self):
         return html.Div(
-            style={"height": "90vh"},
             children=[
-                wcc.Graph(
-                    id=self.register_component_unique_id(TimeSeriesPlot.Ids.GRAPH),
-                    config={
-                        "responsive": True,
-                    },
-                )
+                html.Div(
+                    style={"height": "50vh"},
+                    children=wcc.Graph(
+                        id=self.register_component_unique_id(TimeSeriesPlot.Ids.GRAPH),
+                        config={
+                            "responsive": True,
+                        },
+                    ),
+                ),
+                dcc.Interval(
+                    id=self.register_component_unique_id(TimeSeriesPlot.Ids.INTERVAL),
+                    interval=1000,
+                    n_intervals=0,
+                ),
+                html.Pre(
+                    style={"height": "20vh", "overflow": "scroll"},
+                    id=self.register_component_unique_id(TimeSeriesPlot.Ids.LOG),
+                ),
+                html.Button(
+                    children="Clear",
+                    id=self.register_component_unique_id(TimeSeriesPlot.Ids.CLEARLOG),
+                ),
             ],
         )
 
@@ -51,9 +72,22 @@ class TimeSeriesView(ViewABC):
         initial_case_name: str = None,
     ) -> None:
         super().__init__("Shared settings")
+        logFormatter = logging.Formatter(
+            fmt="%(asctime)s:\t%(name)s:\t%(levelname)s:\t%(message)s"
+        )
+        self.log_stream = StringIO()
+        self.logger = logging.getLogger("TimeSeries")
+        self.logger.setLevel(logging.INFO)
+        stream_handler = logging.StreamHandler(self.log_stream)
+        stream_handler.setLevel(logging.INFO)
+        stream_handler.setFormatter(logFormatter)
+        self.logger.addHandler(stream_handler)
         self.add_settings_group(
             CaseSettings(
-                env=env, initial_case_name=initial_case_name, interactive=interactive
+                env=env,
+                initial_case_name=initial_case_name,
+                interactive=interactive,
+                logger=self.logger,
             ),
             TimeSeriesView.Ids.CASESETTINGS,
         )
@@ -127,10 +161,12 @@ class TimeSeriesView(ViewABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
 
             vectors = get_smry_vector_names(
                 explorer=explorer, case_uuid=case_uuid, iteration_id=iteration_id
             )
+            self.logger.info(f"get_smry_vector_names: {timer.lap_s()}")
             if vectors:
                 vec_opts = [{"label": vector, "value": vector} for vector in vectors]
                 vec_val = current_vector if current_vector in vectors else vectors[0]
@@ -178,47 +214,83 @@ class TimeSeriesView(ViewABC):
             fig = go.Figure()
             if not cases or not iterations or not vectors:
                 return no_update
-            for case, iteration, vector, color in zip(
-                cases, iterations, vectors, ["red", "blue"]
-            ):
+            timer = PerfTimer()
+            try:
+                for case, iteration, vector, color in zip(
+                    cases, iterations, vectors, ["red", "blue"]
+                ):
 
-                if case is not None and iteration is not None and vector is not None:
+                    if (
+                        case is not None
+                        and iteration is not None
+                        and vector is not None
+                    ):
+                        df = get_vector_data(
+                            explorer,
+                            case_uuid=case,
+                            iteration_id=iteration,
+                            vector_name="DATE",
+                        )
+                        self.logger.info(f"got date data : {timer.lap_s()}")
+                        df[vector] = get_vector_data(
+                            explorer,
+                            case_uuid=case,
+                            vector_name=vector,
+                            iteration_id=iteration,
+                        )[vector]
+                        self.logger.info(f"got vector data : {timer.lap_s()}")
+                        if aggregation == "aggregation":
+                            fig.add_traces(
+                                plotly_aggregation_traces_for_vector(
+                                    df,
+                                    case_id=explorer.get_case_by_id(case).case_name,
+                                    vector_name=vector,
+                                    iteration_id=iteration,
+                                    color=color,
+                                )
+                            )
+                        else:
+                            fig.add_traces(
+                                plotly_realization_traces_for_vector(
+                                    df,
+                                    case_id=explorer.get_case_by_id(case).case_name,
+                                    vector_name=vector,
+                                    iteration_id=iteration,
+                                    color=color,
+                                )
+                            )
 
-                    if aggregation == "aggregation":
-                        fig.add_traces(
-                            plotly_aggregation_traces_for_vector(
-                                explorer,
-                                case_id=case,
-                                vector_name=vector,
-                                iteration_id=iteration,
-                                color=color,
-                            )
-                        )
-                    else:
-                        fig.add_traces(
-                            plotly_realization_traces_for_vector(
-                                explorer,
-                                case_id=case,
-                                vector_name=vector,
-                                iteration_id=iteration,
-                                color=color,
-                            )
-                        )
+            except TypeError:
+                self.logger.info(
+                    f"Failed to get vector data for case {case} : {timer.lap_s()}"
+                )
+                return no_update
 
             return fig
 
+        @callback(
+            Output(view_comp_id(TimeSeriesPlot.Ids.LOG), "children"),
+            Input(view_comp_id(TimeSeriesPlot.Ids.INTERVAL), "n_intervals"),
+        )
+        def _update_log(_):
+            return self.log_stream.getvalue()
+
+        @callback(
+            Output(view_comp_id(TimeSeriesPlot.Ids.LOG), "id"),
+            Input(view_comp_id(TimeSeriesPlot.Ids.CLEARLOG), "n_clicks"),
+            prevent_initial_call=True,
+        )
+        def _update_log(_):
+            self.log_stream.truncate(0)
+            self.log_stream.seek(0)
+            return no_update
+
 
 def plotly_realization_traces_for_vector(
-    explorer: Explorer, case_id: str, iteration_id: str, vector_name: str, color: str
+    df: pd.DataFrame, case_name: str, iteration_id: str, vector_name: str, color: str
 ):
 
-    df = get_vector_data(
-        explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
-    )
-    df[vector_name] = get_vector_data(
-        explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
-    )[vector_name]
-    name = f"{explorer.get_case_by_id(case_id).case_name}-{iteration_id}-{vector_name}"
+    name = f"{case_name}-{iteration_id}-{vector_name}"
     return [
         go.Scatter(
             x=real_df["DATE"],
@@ -266,15 +338,10 @@ def calc_series_statistics(
 
 
 def plotly_aggregation_traces_for_vector(
-    explorer: Explorer, case_id: str, iteration_id: str, vector_name: str, color: str
+    df: pd.DataFrame, case_name: str, iteration_id: str, vector_name: str, color: str
 ) -> dict:
-    case_name = f"{explorer.get_case_by_id(case_id).case_name}-{iteration_id}"
-    df = get_vector_data(
-        explorer, case_uuid=case_id, iteration_id=iteration_id, vector_name="DATE"
-    )
-    df[vector_name] = get_vector_data(
-        explorer, case_uuid=case_id, vector_name=vector_name, iteration_id=iteration_id
-    )[vector_name]
+    case_name = f"{case_name}-{iteration_id}"
+
     stat_df = calc_series_statistics(df, vector_name)
     traces = [
         {

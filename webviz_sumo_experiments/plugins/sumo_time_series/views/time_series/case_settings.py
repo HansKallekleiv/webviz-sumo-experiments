@@ -8,6 +8,8 @@ import webviz_core_components as wcc
 
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import SettingsGroupABC
+
+from webviz_sumo_experiments import PerfTimer
 from ...sumo_requests import get_cases_with_smry_data
 
 
@@ -17,12 +19,13 @@ class CaseSettings(SettingsGroupABC):
         FIELD = "sumo-field"
 
     def __init__(
-        self, env: str, initial_case_name: List[str], interactive: bool
+        self, env: str, initial_case_name: List[str], interactive: bool, logger
     ) -> None:
         super().__init__("Sumo cases")
         self.env = env
         self.initial_case_name = initial_case_name
         self.interactive = interactive
+        self.logger = logger
 
     def layout(self) -> List[Component]:
         return [
@@ -114,8 +117,9 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             fields = explorer.get_fields()
-
+            self.logger.info(f"Got Sumo fields in {timer.lap_s()}")
             return [
                 {"label": field, "value": field} for field in list(fields.keys())
             ], list(fields.keys())[0]
@@ -142,8 +146,10 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             case_ids = get_cases_with_smry_data(explorer, field)
             cases = [explorer.get_case_by_id(case_id) for case_id in case_ids]
+            self.logger.info(f"Got Sumo cases with summary data in {timer.lap_s()}")
 
             if cases:
                 initial_case_id = cases[0].sumo_id
@@ -192,9 +198,11 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             iterations = (
                 explorer.get_case_by_id(case_id).get_iterations() if case_id else None
             )
+            self.logger.info(f"Got Sumo iterations in {timer.lap_s()}")
 
             iteration_opts = (
                 [

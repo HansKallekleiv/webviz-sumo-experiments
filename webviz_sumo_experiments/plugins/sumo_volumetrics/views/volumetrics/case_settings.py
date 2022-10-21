@@ -8,6 +8,7 @@ import webviz_core_components as wcc
 
 from webviz_config.utils import StrEnum
 from webviz_config.webviz_plugin_subclasses import SettingsGroupABC
+from webviz_sumo_experiments import PerfTimer
 from ...sumo_requests import get_case_uuids_with_volumetrics
 
 
@@ -19,9 +20,10 @@ class CaseSettings(SettingsGroupABC):
         ITERATION = "sumo-iteration"
 
     def __init__(
-        self, env: str, initial_case_name: List[str], interactive: bool
+        self, env: str, initial_case_name: List[str], interactive: bool, logger
     ) -> None:
         super().__init__("Sumo cases")
+        self.logger = logger
         self.env = env
         self.initial_case_name = initial_case_name
         self.interactive = interactive
@@ -115,8 +117,9 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             fields = explorer.get_fields()
-
+            self.logger.info(f"Got Sumo fields in {timer.lap_s()}s")
             return [
                 {"label": field, "value": field} for field in list(fields.keys())
             ], list(fields.keys())[0]
@@ -143,7 +146,9 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             case_ids = get_case_uuids_with_volumetrics(explorer, field)
+            self.logger.info(f"Got Sumo cases with volumetrics in {timer.lap_s()}")
             cases = [explorer.get_case_by_id(case_id) for case_id in case_ids]
 
             if cases:
@@ -193,10 +198,11 @@ class CaseSettings(SettingsGroupABC):
                     env=self.env,
                     token=flask.request.headers["X-Auth-Request-Access-Token"],
                 )
+            timer = PerfTimer()
             iterations = (
                 explorer.get_case_by_id(case_id).get_iterations() if case_id else None
             )
-
+            self.logger.info(f"Got Sumo iterations in {timer.lap_s()}")
             iteration_opts = (
                 [
                     {"label": iteration["name"], "value": iteration["id"]}
