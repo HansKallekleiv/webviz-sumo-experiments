@@ -289,7 +289,11 @@ class VolumetricsView(ViewABC):
             Input(view_comp_id(VolumetricsPlot.Ids.INTERVAL), "n_intervals"),
         )
         def _update_log(_):
-            return self.log_stream.getvalue()
+            logstring = self.log_stream.getvalue()
+            logstring = logstring.split("\n")
+            logstring.reverse()
+            logstring = ("\n").join(logstring)
+            return logstring
 
         @callback(
             Output(view_comp_id(VolumetricsPlot.Ids.LOG), "id"),
