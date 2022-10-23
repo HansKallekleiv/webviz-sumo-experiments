@@ -14,6 +14,7 @@ def get_case_uuids_with_volumetrics(explorer: Explorer, field_id):
                 fmu.realization.id:0 AND \
                 fmu.iteration.id:0",
         select="_sumo.parent_object",
+        size=1000,
     )["hits"]["hits"]
     if not hits:
         return []
@@ -47,6 +48,7 @@ def get_realizations_for_volumetric_name(
                 data.name:{volumetric_name} AND \
                 fmu.iteration.id:{iteration_id}",
         select="fmu.realization.id",
+        size=10000,
     )["hits"]["hits"]
     if not hits:
         return []

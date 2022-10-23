@@ -263,6 +263,7 @@ class VolumetricsView(ViewABC):
                 return no_update
             timer = PerfTimer()
             dfs = []
+            self.logger.info(f"Getting volumetrics per realization...")
             for case, iteration, volname, volresponse in zip(
                 cases, iterations, volnames, volresponses
             ):
@@ -279,7 +280,7 @@ class VolumetricsView(ViewABC):
                     "response_name"
                 ] = f"{case_name}-{iteration}-{volname}-{volresponse}"
                 dfs.append(vol_df)
-            self.logger.info(f"get_ensemble_volumetrics: {timer.lap_s()}")
+            self.logger.info(f"Volumetrics for all realizations: {timer.lap_s()}")
             df = pd.concat(dfs)
 
             return px.histogram(df, x="value", nbins=20, facet_col="response_name")
